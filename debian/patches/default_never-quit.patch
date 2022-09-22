@@ -1,0 +1,47 @@
+Last-Update: 2019-10-18
+Forwarded: not-needed
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=862908
+Bug-Upstream: https://www.smartmontools.org/ticket/1248
+Author: Dmitry Smirnov <onlyjob@debian.org>
+Description: smartd to keep running without disks.
+ Daemon should behave consistently on all systems. By allowing daemon to
+ start even on the diskless system one can implement udev handler to HUP
+ daemon to trigger rescan for new disks.
+ See also https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=893665
+
+--- a/smartd.8.in
++++ b/smartd.8.in
+@@ -349,9 +349,9 @@
+ arguments are to this option are:
+ .Sp
+ .I nodev
+ \- Exit if there are no devices to monitor, or if any errors are found
+-at startup in the configuration file.  This is the default.
++at startup in the configuration file.
+ .Sp
+ .I errors
+ \- Exit if there are no devices to monitor, or if any errors are found
+ in the configuration file /usr/local/etc/smartd.conf at startup or whenever it
+@@ -367,8 +367,9 @@
+ invalid command line arguments).  In this mode, even if there are no
+ devices to monitor, or if the configuration file
+ \fB/usr/local/etc/smartd.conf\fP has errors, \fBsmartd\fP will continue to run,
+ waiting to load a configuration file listing valid devices.
++This is the default.
+ .Sp
+ .I onecheck
+ \- Start \fBsmartd\fP in debug mode, then register devices, then check
+ device's SMART status once, and then exit with zero exit status if all
+--- a/smartd.cpp
++++ b/smartd.cpp
+@@ -182,9 +182,9 @@
+ enum quit_t {
+   QUIT_NODEV, QUIT_NODEVSTARTUP, QUIT_NEVER, QUIT_ONECHECK,
+   QUIT_SHOWTESTS, QUIT_ERRORS
+ };
+-static quit_t quit = QUIT_NODEV;
++static quit_t quit = QUIT_NEVER;
+ 
+ // command-line; this is the default syslog(3) log facility to use.
+ static int facility=LOG_DAEMON;
+ 

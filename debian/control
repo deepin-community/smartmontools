@@ -1,0 +1,41 @@
+Source: smartmontools
+Section: utils
+Priority: optional
+Standards-Version: 4.5.0
+Maintainer: Dmitry Smirnov <onlyjob@debian.org>
+Uploaders: Florian Maier <contact@marsmenschen.com>,
+           Jonathan Dowland <jmtd@debian.org>,
+Build-Depends: autoconf,
+               automake,
+               debhelper-compat (= 12),
+               freebsd-glue [kfreebsd-any],
+               libcam-dev [kfreebsd-any],
+               libcap-ng-dev [!kfreebsd-any !hurd-i386 !sparc !avr32],
+               libselinux1-dev [linux-any],
+               libusb2-dev [kfreebsd-any],
+               libsystemd-dev [!kfreebsd-any],
+               pkg-config,
+Vcs-Git: https://salsa.debian.org/debian/smartmontools.git
+Vcs-Browser: https://salsa.debian.org/debian/smartmontools
+Homepage: http://smartmontools.sourceforge.net/
+Rules-Requires-Root: no
+
+Package: smartmontools
+Architecture: any
+Conflicts: smartsuite, ucsc-smartsuite
+Pre-Depends: ${misc:Pre-Depends}
+Depends: debianutils (>= 2.2),
+         lsb-base (>= 3.2-14),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Recommends: ${misc:Recommends}
+Suggests: gsmartcontrol, smart-notifier
+    ,mailx | mailutils
+# update-smart-drivedb
+    ,curl | wget | lynx, gpg
+Description: control and monitor storage systems using S.M.A.R.T.
+ The smartmontools package contains two utility programs (smartctl and smartd)
+ to control and monitor storage systems using the Self-Monitoring, Analysis and
+ Reporting Technology System (S.M.A.R.T.) built into most modern ATA and SCSI
+ hard disks. It is derived from the smartsuite package, and includes support
+ for ATA/ATAPI-5 disks. It should run on any modern Linux system.
