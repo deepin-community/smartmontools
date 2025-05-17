@@ -3,7 +3,7 @@
  *
  * Home page of code is: https://www.smartmontools.org
  *
- * Copyright (C) 2004-20 Christian Franke
+ * Copyright (C) 2004-22 Christian Franke
  *
  * Original AACRaid code:
  *  Copyright (C) 2015    Nidhi Malhotra <nidhi.malhotra@pmcs.com>
@@ -46,6 +46,7 @@ extern unsigned char failuretest_permissive;
 
 #include <windows.h>
 #include <ntddscsi.h> // IOCTL_ATA_PASS_THROUGH, IOCTL_SCSI_PASS_THROUGH, ...
+// #include <nvme.h> // NVME_COMMAND, missing in older versions of Mingw-w64
 
 #ifndef _WIN32
 // csmisas.h and aacraid.h require _WIN32 but w32api-headers no longer define it on Cygwin
@@ -72,7 +73,7 @@ extern unsigned char failuretest_permissive;
 #define strnicmp strncasecmp
 #endif
 
-const char * os_win32_cpp_cvsid = "$Id: os_win32.cpp 5105 2020-11-01 13:41:36Z chrfranke $";
+const char * os_win32_cpp_cvsid = "$Id: os_win32.cpp 5419 2022-11-22 17:30:56Z chrfranke $";
 
 /////////////////////////////////////////////////////////////////////////////
 // Windows I/O-controls, some declarations are missing in the include files
@@ -206,6 +207,84 @@ namespace win10 {
 STATIC_ASSERT(IOCTL_STORAGE_PREDICT_FAILURE == 0x002d1100);
 STATIC_ASSERT(sizeof(STORAGE_PREDICT_FAILURE) == 4+512);
 
+// IOCTL_STORAGE_PROTOCOL_COMMAND
+
+#ifndef IOCTL_STORAGE_PROTOCOL_COMMAND
+
+#define IOCTL_STORAGE_PROTOCOL_COMMAND \
+  CTL_CODE(IOCTL_STORAGE_BASE, 0x04f0, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+#endif // IOCTL_STORAGE_PROTOCOL_COMMAND
+
+#ifndef STORAGE_PROTOCOL_STRUCTURE_VERSION
+
+#define STORAGE_PROTOCOL_STRUCTURE_VERSION 1
+
+typedef struct _STORAGE_PROTOCOL_COMMAND {
+  DWORD Version;
+  DWORD Length;
+  win10::STORAGE_PROTOCOL_TYPE ProtocolType;
+  DWORD Flags;
+  DWORD ReturnStatus;
+  DWORD ErrorCode;
+  DWORD CommandLength;
+  DWORD ErrorInfoLength;
+  DWORD DataToDeviceTransferLength;
+  DWORD DataFromDeviceTransferLength;
+  DWORD TimeOutValue;
+  DWORD ErrorInfoOffset;
+  DWORD DataToDeviceBufferOffset;
+  DWORD DataFromDeviceBufferOffset;
+  DWORD CommandSpecific;
+  DWORD Reserved0;
+  DWORD FixedProtocolReturnData;
+  DWORD Reserved1[3];
+  BYTE Command[1];
+} STORAGE_PROTOCOL_COMMAND;
+
+#define STORAGE_PROTOCOL_COMMAND_FLAG_ADAPTER_REQUEST 0x80000000
+#define STORAGE_PROTOCOL_SPECIFIC_NVME_ADMIN_COMMAND 0x01
+#define STORAGE_PROTOCOL_COMMAND_LENGTH_NVME 0x40
+
+#endif // STORAGE_PROTOCOL_STRUCTURE_VERSION
+
+STATIC_ASSERT(IOCTL_STORAGE_PROTOCOL_COMMAND == 0x002dd3c0);
+STATIC_ASSERT(offsetof(STORAGE_PROTOCOL_COMMAND, Command) == 80);
+STATIC_ASSERT(sizeof(STORAGE_PROTOCOL_COMMAND) == 84);
+
+// NVME_COMMAND from <nvme.h>
+
+#ifndef NVME_NAMESPACE_ALL
+
+typedef union {
+  struct {
+    ULONG OPC : 8;
+    ULONG _unused : 24;
+  };
+  ULONG AsUlong;
+} NVME_COMMAND_DWORD0;
+
+typedef struct {
+  NVME_COMMAND_DWORD0 CDW0;
+  ULONG NSID;
+  ULONGLONG _unused[4];
+  union {
+    struct {
+      ULONG CDW10;
+      ULONG CDW11;
+      ULONG CDW12;
+      ULONG CDW13;
+      ULONG CDW14;
+      ULONG CDW15;
+    } GENERAL;
+    // Others: Not used
+  } u;
+} NVME_COMMAND;
+
+#endif
+
+STATIC_ASSERT(sizeof(NVME_COMMAND) == STORAGE_PROTOCOL_COMMAND_LENGTH_NVME);
+STATIC_ASSERT(offsetof(NVME_COMMAND, u.GENERAL.CDW10) == 40);
 
 // 3ware specific versions of SMART ioctl structs
 
@@ -1322,13 +1401,13 @@ public:
 
   virtual ~win_ata_device();
 
-  virtual bool open();
+  virtual bool open() override;
 
-  virtual bool is_powered_down();
+  virtual bool is_powered_down() override;
 
-  virtual bool ata_pass_through(const ata_cmd_in & in, ata_cmd_out & out);
+  virtual bool ata_pass_through(const ata_cmd_in & in, ata_cmd_out & out) override;
 
-  virtual bool ata_identify_is_cached() const;
+  virtual bool ata_identify_is_cached() const override;
 
 private:
   bool open(bool query_device);
@@ -1488,7 +1567,7 @@ bool win_ata_device::open(int phydrive, int logdrive, const char * options, int 
   m_is_3ware = (vers_ex.wIdentifier == SMART_VENDOR_3WARE);
 
   unsigned portmap = 0;
-  if (port >= 0 && devmap >= 0) {
+  if (devmap >= 0) {
     // 3ware RAID: check vendor id
     if (!m_is_3ware) {
       pout("SMART_GET_VERSION returns unknown Identifier = 0x%04x\n"
@@ -2178,7 +2257,7 @@ class csmi_ata_device
   virtual public /*implements*/ ata_device
 {
 public:
-  virtual bool ata_pass_through(const ata_cmd_in & in, ata_cmd_out & out);
+  virtual bool ata_pass_through(const ata_cmd_in & in, ata_cmd_out & out) override;
 
 protected:
   csmi_ata_device()
@@ -2299,17 +2378,17 @@ public:
 
   virtual ~win_csmi_device();
 
-  virtual bool open();
+  virtual bool open() override;
 
-  virtual bool close();
+  virtual bool close() override;
 
-  virtual bool is_open() const;
+  virtual bool is_open() const override;
 
   bool open_scsi();
 
 protected:
   virtual bool csmi_ioctl(unsigned code, IOCTL_HEADER * csmi_buffer,
-    unsigned csmi_bufsiz);
+    unsigned csmi_bufsiz) override;
 
 private:
   HANDLE m_fh; ///< Controller device handle
@@ -2468,11 +2547,11 @@ class win_tw_cli_device
 public:
   win_tw_cli_device(smart_interface * intf, const char * dev_name, const char * req_type);
 
-  virtual bool is_open() const;
+  virtual bool is_open() const override;
 
-  virtual bool open();
+  virtual bool open() override;
 
-  virtual bool close();
+  virtual bool close() override;
 
 protected:
   virtual int ata_command_interface(smart_command_set command, int select, char * data);
@@ -2682,9 +2761,9 @@ class win_scsi_device
 public:
   win_scsi_device(smart_interface * intf, const char * dev_name, const char * req_type);
 
-  virtual bool open();
+  virtual bool open() override;
 
-  virtual bool scsi_pass_through(scsi_cmnd_io * iop);
+  virtual bool scsi_pass_through(scsi_cmnd_io * iop) override;
 
 private:
   bool open(int pd_num, int ld_num, int tape_num, int sub_addr);
@@ -2830,7 +2909,7 @@ bool win_scsi_device::scsi_pass_through(struct scsi_cmnd_io * iop)
     char buff[256];
     const int sz = (int)sizeof(buff);
 
-    np = scsi_get_opcode_name(ucp[0]);
+    np = scsi_get_opcode_name(ucp);
     j = snprintf(buff, sz, " [%s: ", np ? np : "<unknown opcode>");
     for (k = 0; k < (int)iop->cmnd_len; ++k)
       j += snprintf(&buff[j], (sz > j ? (sz - j) : 0), "%02x ", ucp[k]);
@@ -2959,7 +3038,7 @@ static long scsi_pass_through_direct(HANDLE fd, UCHAR targetid, struct scsi_cmnd
     char buff[256];
     const int sz = (int)sizeof(buff);
 
-    np = scsi_get_opcode_name(ucp[0]);
+    np = scsi_get_opcode_name(ucp);
     j = snprintf(buff, sz, " [%s: ", np ? np : "<unknown opcode>");
     for (k = 0; k < (int)iop->cmnd_len; ++k)
       j += snprintf(&buff[j], (sz > j ? (sz - j) : 0), "%02x ", ucp[k]);
@@ -3085,11 +3164,11 @@ class win_areca_scsi_device
 {
 public:
   win_areca_scsi_device(smart_interface * intf, const char * dev_name, int disknum, int encnum = 1);
-  virtual bool open();
-  virtual smart_device * autodetect_open();
-  virtual bool arcmsr_lock();
-  virtual bool arcmsr_unlock();
-  virtual int arcmsr_do_scsi_io(struct scsi_cmnd_io * iop);
+  virtual bool open() override;
+  virtual smart_device * autodetect_open() override;
+  virtual bool arcmsr_lock() override;
+  virtual bool arcmsr_unlock() override;
+  virtual int arcmsr_do_scsi_io(struct scsi_cmnd_io * iop) override;
 
 private:
   HANDLE m_mutex;
@@ -3199,11 +3278,11 @@ class win_areca_ata_device
 {
 public:
   win_areca_ata_device(smart_interface * intf, const char * dev_name, int disknum, int encnum = 1);
-  virtual bool open();
-  virtual smart_device * autodetect_open();
-  virtual bool arcmsr_lock();
-  virtual bool arcmsr_unlock();
-  virtual int arcmsr_do_scsi_io(struct scsi_cmnd_io * iop);
+  virtual bool open() override;
+  virtual smart_device * autodetect_open() override;
+  virtual bool arcmsr_lock() override;
+  virtual bool arcmsr_unlock() override;
+  virtual int arcmsr_do_scsi_io(struct scsi_cmnd_io * iop) override;
 
 private:
   HANDLE m_mutex;
@@ -3336,9 +3415,9 @@ public:
 
   virtual ~win_aacraid_device();
 
-  virtual bool open();
+  virtual bool open() override;
 
-  virtual bool scsi_pass_through(struct scsi_cmnd_io *iop);
+  virtual bool scsi_pass_through(struct scsi_cmnd_io *iop) override;
 
 private:
   //Device Host number
@@ -3396,7 +3475,7 @@ bool win_aacraid_device::scsi_pass_through(struct scsi_cmnd_io *iop)
     const char * np;
     char buff[256];
     const int sz = (int)sizeof(buff);
-    np = scsi_get_opcode_name(ucp[0]);
+    np = scsi_get_opcode_name(ucp);
     j  = snprintf(buff, sz, " [%s: ", np ? np : "<unknown opcode>");
     for (k = 0; k < (int)iop->cmnd_len; ++k)
       j += snprintf(&buff[j], (sz > j ? (sz - j) : 0), "%02x ", ucp[k]);
@@ -3414,12 +3493,15 @@ bool win_aacraid_device::scsi_pass_through(struct scsi_cmnd_io *iop)
     pout("buff %s\n",buff);
   }
 
-  char ioBuffer[1000];
+  // Create buffer with appropriate size
+  constexpr unsigned scsiRequestBlockSize = sizeof(SCSI_REQUEST_BLOCK);
+  constexpr unsigned dataOffset = (sizeof(SRB_IO_CONTROL) + scsiRequestBlockSize + 7) & 0xfffffff8;
+  raw_buffer pthru_raw_buf(dataOffset + iop->dxfer_len + 8); // 32|64-bit: 96|120 + ...
+
+  char * ioBuffer = reinterpret_cast<char *>(pthru_raw_buf.data());
   SRB_IO_CONTROL * pSrbIO = (SRB_IO_CONTROL *) ioBuffer;
   SCSI_REQUEST_BLOCK * pScsiIO = (SCSI_REQUEST_BLOCK *) (ioBuffer + sizeof(SRB_IO_CONTROL));
-  DWORD scsiRequestBlockSize = sizeof(SCSI_REQUEST_BLOCK);
   char *pRequestSenseIO = (char *) (ioBuffer + sizeof(SRB_IO_CONTROL) + scsiRequestBlockSize);
-  DWORD dataOffset = (sizeof(SRB_IO_CONTROL) + scsiRequestBlockSize  + 7) & 0xfffffff8;
   char *pDataIO = (char *) (ioBuffer + dataOffset);
   memset(pScsiIO, 0, scsiRequestBlockSize);
   pScsiIO->Length    = (USHORT) scsiRequestBlockSize;
@@ -3529,9 +3611,9 @@ public:
   win_nvme_device(smart_interface * intf, const char * dev_name,
     const char * req_type, unsigned nsid);
 
-  virtual bool open();
+  virtual bool open() override;
 
-  virtual bool nvme_pass_through(const nvme_cmd_in & in, nvme_cmd_out & out);
+  virtual bool nvme_pass_through(const nvme_cmd_in & in, nvme_cmd_out & out) override;
 
   bool open_scsi(int n);
 
@@ -3726,12 +3808,16 @@ public:
   win10_nvme_device(smart_interface * intf, const char * dev_name,
     const char * req_type, unsigned nsid);
 
-  virtual bool open();
+  virtual bool open() override;
 
-  virtual bool nvme_pass_through(const nvme_cmd_in & in, nvme_cmd_out & out);
+  virtual bool nvme_pass_through(const nvme_cmd_in & in, nvme_cmd_out & out) override;
 
 private:
   bool open(int phydrive, int logdrive);
+
+  bool nvme_storage_query_property(const nvme_cmd_in & in, nvme_cmd_out & out);
+
+  bool nvme_storage_protocol_command(const nvme_cmd_in & in, nvme_cmd_out & out);
 };
 
 
@@ -3775,9 +3861,16 @@ bool win10_nvme_device::open(int phydrive, int logdrive)
   else
     snprintf(devpath, sizeof(devpath), "\\\\.\\%c:", 'A'+logdrive);
 
-  // No GENERIC_READ/WRITE access required, this works without admin rights
-  HANDLE h = CreateFileA(devpath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-    (SECURITY_ATTRIBUTES *)0, OPEN_EXISTING, 0, (HANDLE)0);
+  bool admin = true;
+  HANDLE h = CreateFileA(devpath, GENERIC_READ | GENERIC_WRITE,
+      FILE_SHARE_READ | FILE_SHARE_WRITE,
+      (SECURITY_ATTRIBUTES *)0, OPEN_EXISTING, 0, (HANDLE)0);
+  if (h == INVALID_HANDLE_VALUE) {
+    // STORAGE_QUERY_PROPERTY works without GENERIC_READ/WRITE access
+    admin = false;
+    h = CreateFileA(devpath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        (SECURITY_ATTRIBUTES*)0, OPEN_EXISTING, 0, (HANDLE)0);
+  }
 
   if (h == INVALID_HANDLE_VALUE) {
     long err = GetLastError();
@@ -3793,7 +3886,7 @@ bool win10_nvme_device::open(int phydrive, int logdrive)
   }
 
   if (nvme_debugmode > 1)
-    pout("  %s: successfully opened\n", devpath);
+    pout("  %s: successfully opened%s\n", devpath, (!admin ? " (without admin rights)" : ""));
 
   set_fh(h);
 
@@ -3814,7 +3907,7 @@ struct STORAGE_PROTOCOL_SPECIFIC_QUERY_WITH_BUFFER
   BYTE DataBuffer[1];
 };
 
-bool win10_nvme_device::nvme_pass_through(const nvme_cmd_in & in, nvme_cmd_out & out)
+bool win10_nvme_device::nvme_storage_query_property(const nvme_cmd_in & in, nvme_cmd_out & out)
 {
   // Create buffer with appropriate size
   raw_buffer spsq_raw_buf(offsetof(STORAGE_PROTOCOL_SPECIFIC_QUERY_WITH_BUFFER, DataBuffer) + in.size);
@@ -3843,13 +3936,10 @@ bool win10_nvme_device::nvme_pass_through(const nvme_cmd_in & in, nvme_cmd_out &
       // Newer drivers (Win10 1809) pass SubValue to CDW12 (DW aligned)
       spsq->ProtocolSpecific.ProtocolDataRequestSubValue = 0; // in.cdw12 (LPOL, NVMe 1.2.1+) ?
       break;
-    // TODO: nvme_admin_get_features
+    // case smartmontools::nvme_admin_get_features: // TODO
     default:
       return set_err(ENOSYS, "NVMe admin command 0x%02x not supported", in.opcode);
   }
-
-  if (in.cdw11 || in.cdw12 || in.cdw13 || in.cdw14 || in.cdw15)
-    return set_err(ENOSYS, "Nonzero NVMe command dwords 11-15 not supported");
 
   spsq->ProtocolSpecific.ProtocolDataOffset = sizeof(spsq->ProtocolSpecific);
   spsq->ProtocolSpecific.ProtocolDataLength = in.size;
@@ -3875,7 +3965,7 @@ bool win10_nvme_device::nvme_pass_through(const nvme_cmd_in & in, nvme_cmd_out &
 
   if (nvme_debugmode > 1)
     pout("  [STORAGE_QUERY_PROPERTY: ReturnData=0x%08x, Reserved[3]={0x%x, 0x%x, 0x%x}]\n",
-    (unsigned)spsq->ProtocolSpecific.FixedProtocolReturnData,
+      (unsigned)spsq->ProtocolSpecific.FixedProtocolReturnData,
       (unsigned)spsq->ProtocolSpecific.Reserved[0],
       (unsigned)spsq->ProtocolSpecific.Reserved[1],
       (unsigned)spsq->ProtocolSpecific.Reserved[2]);
@@ -3891,6 +3981,73 @@ bool win10_nvme_device::nvme_pass_through(const nvme_cmd_in & in, nvme_cmd_out &
   return true;
 }
 
+bool win10_nvme_device::nvme_storage_protocol_command(const nvme_cmd_in & in, nvme_cmd_out & /* out */)
+{
+  // Limit to self-test command for now
+  switch (in.opcode) {
+    case smartmontools::nvme_admin_dev_self_test:
+      break;
+    default:
+      return set_err(ENOSYS, "NVMe admin command 0x%02x not supported", in.opcode);
+  }
+
+  // This is based on info from https://github.com/ken-yossy/nvmetool-win (License: MIT)
+
+  // Assume NO_DATA command
+  char spcm_buf[offsetof(STORAGE_PROTOCOL_COMMAND, Command) + STORAGE_PROTOCOL_COMMAND_LENGTH_NVME]{};
+  STORAGE_PROTOCOL_COMMAND * spcm = reinterpret_cast<STORAGE_PROTOCOL_COMMAND *>(spcm_buf);
+
+  // Set NVMe specific STORAGE_PROTOCOL_COMMAND
+  spcm->Version = STORAGE_PROTOCOL_STRUCTURE_VERSION;
+  spcm->Length = sizeof(STORAGE_PROTOCOL_COMMAND);
+  spcm->ProtocolType = (decltype(spcm->ProtocolType))win10::ProtocolTypeNvme;
+  spcm->Flags = STORAGE_PROTOCOL_COMMAND_FLAG_ADAPTER_REQUEST;
+  spcm->CommandLength = STORAGE_PROTOCOL_COMMAND_LENGTH_NVME;
+  spcm->TimeOutValue = 60;
+  spcm->CommandSpecific = STORAGE_PROTOCOL_SPECIFIC_NVME_ADMIN_COMMAND;
+
+  NVME_COMMAND * nvcm = reinterpret_cast<NVME_COMMAND *>(&spcm->Command);
+  nvcm->CDW0.OPC = in.opcode;
+  nvcm->NSID = in.nsid;
+  nvcm->u.GENERAL.CDW10 = in.cdw10;
+
+  if (nvme_debugmode > 1)
+    pout("  [IOCTL_STORAGE_PROTOCOL_COMMAND(NVMe): CDW0.OPC=0x%02x, NSID=0x%04x, CDW10=0x%04x]\n",
+      (unsigned)nvcm->CDW0.OPC,
+      (unsigned)nvcm->NSID,
+      (unsigned)nvcm->u.GENERAL.CDW10);
+
+  // Call IOCTL_STORAGE_PROTOCOL_COMMAND
+  DWORD num_out = 0;
+  long err = 0;
+  if (!DeviceIoControl(get_fh(), IOCTL_STORAGE_PROTOCOL_COMMAND,
+    spcm, sizeof(spcm_buf), spcm, sizeof(spcm_buf),
+    &num_out, (OVERLAPPED*)0)) {
+    err = GetLastError();
+  }
+
+  // NVMe status checked by IOCTL?
+  if (err)
+    return set_err(EIO, "IOCTL_STORAGE_PROTOCOL_COMMAND(NVMe) failed, Error=%ld", err);
+
+  // out.result = 0;
+  return true;
+}
+
+bool win10_nvme_device::nvme_pass_through(const nvme_cmd_in & in, nvme_cmd_out & out)
+{
+  if (in.cdw11 || in.cdw12 || in.cdw13 || in.cdw14 || in.cdw15)
+    return set_err(ENOSYS, "Nonzero NVMe command dwords 11-15 not supported");
+
+  switch (in.opcode) {
+    case smartmontools::nvme_admin_identify:
+    case smartmontools::nvme_admin_get_log_page:
+    // case smartmontools::nvme_admin_get_features: // TODO
+      return nvme_storage_query_property(in, out);
+    default:
+      return nvme_storage_protocol_command(in, out);
+  }
+}
 
 /////////////////////////////////////////////////////////////////////////////
 // win_smart_interface
@@ -3900,31 +4057,27 @@ class win_smart_interface
 : public /*implements*/ smart_interface
 {
 public:
-  virtual std::string get_os_version_str();
+  virtual std::string get_os_version_str() override;
 
-  virtual std::string get_app_examples(const char * appname);
+  virtual std::string get_app_examples(const char * appname) override;
 
-#ifndef __CYGWIN__
-  virtual int64_t get_timer_usec();
-#endif
-
-  virtual bool disable_system_auto_standby(bool disable);
+  virtual bool disable_system_auto_standby(bool disable) override;
 
   virtual bool scan_smart_devices(smart_device_list & devlist, const char * type,
-    const char * pattern = 0);
+    const char * pattern = 0) override;
 
 protected:
-  virtual ata_device * get_ata_device(const char * name, const char * type);
+  virtual ata_device * get_ata_device(const char * name, const char * type) override;
 
-  virtual scsi_device * get_scsi_device(const char * name, const char * type);
+  virtual scsi_device * get_scsi_device(const char * name, const char * type) override;
 
-  virtual nvme_device * get_nvme_device(const char * name, const char * type, unsigned nsid);
+  virtual nvme_device * get_nvme_device(const char * name, const char * type, unsigned nsid) override;
 
-  virtual smart_device * autodetect_smart_device(const char * name);
+  virtual smart_device * autodetect_smart_device(const char * name) override;
 
-  virtual smart_device * get_custom_smart_device(const char * name, const char * type);
+  virtual smart_device * get_custom_smart_device(const char * name, const char * type) override;
 
-  virtual std::string get_valid_custom_dev_types_str();
+  virtual std::string get_valid_custom_dev_types_str() override;
 
 private:
   smart_device * get_usb_device(const char * name, int phydrive, int logdrive = -1);
@@ -4007,22 +4160,32 @@ std::string win_smart_interface::get_os_version_str()
           case 18363:   w = "w10-1909"; break;
           case 19041:   w = "w10-2004"; break;
           case 19042:   w = "w10-20H2"; break;
-          default:      w = "w10";
+          case 19043:   w = "w10-21H1"; break;
+          case 19044:   w = "w10-21H2"; break;
+          case 19045:   w = "w10-22H2"; break;
+          case 22000:   w = "w11-21H2"; break;
+          case 22621:   w = "w11-22H2"; break;
+          default:      w = (vi.dwBuildNumber < 22000
+                          ? "w10"
+                          : "w11");
                         build = vi.dwBuildNumber; break;
         } break;
       case 0xa0<<1 | 1:
         switch (vi.dwBuildNumber) {
-          case 14393:   w = "2016";      break;
+          case 14393:   w = "2016-1607"; break;
           case 16299:   w = "2016-1709"; break;
           case 17134:   w = "2016-1803"; break;
-          case 17763:   w = "2019";      break;
+          case 17763:   w = "2019-1809"; break;
           case 18362:   w = "2019-1903"; break;
           case 18363:   w = "2019-1909"; break;
           case 19041:   w = "2019-2004"; break;
           case 19042:   w = "2019-20H2"; break;
+          case 20348:   w = "2022-21H2"; break;
           default:      w = (vi.dwBuildNumber < 17763
                           ? "2016"
-                          : "2019");
+                          :  vi.dwBuildNumber < 20348
+                          ? "2019"
+                          : "2022");
                         build = vi.dwBuildNumber; break;
         } break;
     }
@@ -4048,30 +4211,6 @@ std::string win_smart_interface::get_os_version_str()
     snprintf(vptr, vlen, "-%s%s", w, w64);
   return vstr;
 }
-
-#ifndef __CYGWIN__
-// MSVCRT only provides ftime() which uses GetSystemTime()
-// This provides only ~15ms resolution by default.
-// Use QueryPerformanceCounter instead (~300ns).
-// (Cygwin provides CLOCK_MONOTONIC which has the same effect)
-int64_t win_smart_interface::get_timer_usec()
-{
-  static int64_t freq = 0;
-
-  LARGE_INTEGER t;
-  if (freq == 0)
-    freq = (QueryPerformanceFrequency(&t) ? t.QuadPart : -1);
-  if (freq <= 0)
-    return smart_interface::get_timer_usec();
-
-  if (!QueryPerformanceCounter(&t))
-    return -1;
-  if (!(0 <= t.QuadPart && t.QuadPart <= (int64_t)(~(uint64_t)0 >> 1)/1000000))
-    return -1;
-
-  return (t.QuadPart * 1000000LL) / freq;
-}
-#endif // __CYGWIN__
 
 
 ata_device * win_smart_interface::get_ata_device(const char * name, const char * type)
@@ -4144,10 +4283,21 @@ smart_device * win_smart_interface::get_custom_smart_device(const char * name, c
 
   // aacraid?
   unsigned ctrnum, lun, target;
-  n1 = -1;
+  n1 = -1; n2 = -1;
 
-  if (   sscanf(type, "aacraid,%u,%u,%u%n", &ctrnum, &lun, &target, &n1) >= 3
-      && n1 == (int)strlen(type)) {
+  if (   sscanf(type, "aacraid,%u,%u,%u%n,force%n", &ctrnum, &lun, &target, &n1, &n2) >= 3
+      && (n1 == (int)strlen(type) || n2 == (int)strlen(type))) {
+
+    if (n2 < 0) {
+      set_err(ENOSYS,
+        "smartmontools AACRAID support is reportedly broken on Windows.\n"
+        "See https://www.smartmontools.org/ticket/1515 for details.\n"
+        "Use '-d aacraid,H,L,ID,force' to try anyway at your own risk.\n"
+        "If you could provide help to fix the problem, please inform\n"
+        PACKAGE_BUGREPORT "\n");
+      return 0;
+    }
+
 #define aacraid_MAX_CTLR_NUM  16
     if (ctrnum >= aacraid_MAX_CTLR_NUM) {
       set_err(EINVAL, "aacraid: invalid host number %u", ctrnum);

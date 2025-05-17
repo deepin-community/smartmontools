@@ -1,8 +1,68 @@
-smartmontools (7.2-1deepin1) unstable; urgency=medium
+smartmontools (7.4-3deepin1) unstable; urgency=medium
 
   * update debian/rules to disable services.
 
  -- wangrong <wangrong@uniontech.com>  Mon, 19 May 2025 20:11:44 +0800
+
+smartmontools (7.4-3) unstable; urgency=medium
+
+  [ Christoph Anton Mitterer ]
+  * run.d/10mail: use sh instead of bash
+  * run.d/10mail: improve check for mailx
+  * run.d/10mail: use smartd’s SMARTD_* variables.
+  * run.d/10mail: send mails separately to each address.
+  * smartd-runner: use sh instead of bash
+  * smartd-runner: no longer invoke scripts with positional parameters.
+
+  [ Dmitry Smirnov ]
+  * rules: corrected removal of redundant "smartd.service" file.
+    (That very file is installed as "smartmontools.service").
+  * New upstream patch to fix building with automake 1.17 (Closes: #1095391).
+  * Build-Depends: pkg-config --> pkgconf.
+
+ -- Dmitry Smirnov <onlyjob@debian.org>  Tue, 25 Feb 2025 23:03:27 +1100
+
+smartmontools (7.4-2) unstable; urgency=medium
+
+  [ Guillem Jover ]
+  * Hurd portability and dpkg arch fixes (Closes: #1056745).
+
+  [ Dmitry Smirnov ]
+  * postinst: check if "update-smart-drivedb" is executable and fall
+    back to "cp" if necessary. (#1056736)
+  * rules: corrected "systemdsystemunitdir" path (Closes: #1056940).
+
+ -- Dmitry Smirnov <onlyjob@debian.org>  Thu, 30 Nov 2023 18:30:49 +1100
+
+smartmontools (7.4-1) unstable; urgency=medium
+
+  * New upstream release.
+    + fixed service startup without devices (Closes: #1029210).
+    + fixed "increasing number of Error Log entries" (Closes: #1041745).
+    + updated "pkg.m4" that fixed second build (Closes: #1048143).
+  * Depends: lsb-base --> sysvinit-utils.
+  * Postinst: install "drivedb.h" using "update-smart-drivedb --install";
+    invoke configure script with "--with-drivedbinstdir" (Closes: #1006019).
+
+  [ Debian Janitor ]
+  * Bump debhelper from old 12 to 13.
+  * Set upstream metadata fields: Archive, Bug-Database, Repository.
+
+  [ Samuel Thibault ]
+  * d/control: Generalize hurd-i386 into hurd-any.
+
+ -- Dmitry Smirnov <onlyjob@debian.org>  Sat, 25 Nov 2023 11:15:24 +1100
+
+smartmontools (7.3-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Standards-Version: 4.6.0.
+  * Updated Homepage URL (Closes: #979547).
+    Thanks, Paul Wise.
+  * Removed "default_never-quit.patch" (Closes: #1006630).
+    Thanks, Christian Franke.
+
+ -- Dmitry Smirnov <onlyjob@debian.org>  Wed, 27 Apr 2022 15:39:01 +1000
 
 smartmontools (7.2-1) unstable; urgency=medium
 

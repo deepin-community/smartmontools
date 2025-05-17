@@ -4,7 +4,7 @@
  * Home page of code is: https://www.smartmontools.org
  *
  * Copyright (C) 2002-11 Bruce Allen
- * Copyright (C) 2008-20 Christian Franke
+ * Copyright (C) 2008-23 Christian Franke
  * Copyright (C) 2000 Michael Cornwell <cornwell@acm.org>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -13,7 +13,7 @@
 #ifndef UTILITY_H_
 #define UTILITY_H_
 
-#define UTILITY_H_CVSID "$Id: utility.h 5035 2020-03-01 16:19:44Z chrfranke $"
+#define UTILITY_H_CVSID "$Id: utility.h 5519 2023-07-24 15:57:54Z chrfranke $"
 
 #include <float.h> // *DBL_MANT_DIG
 #include <time.h>
@@ -40,7 +40,8 @@
 #endif
 
 // Make version information string
-std::string format_version_info(const char * prog_name, bool full = false);
+// lines: 1: version only, 2: version+copyright, >=3: full information
+std::string format_version_info(const char * prog_name, int lines = 2);
 
 // return (v)sprintf() formatted std::string
 std::string strprintf(const char * fmt, ...)
@@ -284,8 +285,8 @@ private:
 // Otherwise precision depends on supported floating point data types.
 
 #if defined(HAVE_LONG_DOUBLE_WIDER) && \
-    (!defined(__MINGW32__) || defined(__USE_MINGW_ANSI_STDIO))
-    // MinGW 'long double' type does not work with MSVCRT *printf()
+    (!defined(__MINGW32__) || __USE_MINGW_ANSI_STDIO)
+    // MinGW 'long double' type does not work with MSVCRT/UCRT *printf()
 #define HAVE_LONG_DOUBLE_WIDER_PRINTF 1
 #else
 #undef HAVE_LONG_DOUBLE_WIDER_PRINTF
@@ -310,6 +311,11 @@ const char * uint128_hilo_to_str(char * str, int strsize, uint64_t value_hi, uin
 template <size_t SIZE>
 inline const char * uint128_hilo_to_str(char (& str)[SIZE], uint64_t value_hi, uint64_t value_lo)
   { return uint128_hilo_to_str(str, (int)SIZE, value_hi, value_lo); }
+
+/// Get microseconds since some unspecified starting point.
+/// Used only for command duration measurements in debug outputs.
+/// Returns -1 if unsupported.
+long long get_timer_usec();
 
 #ifdef _WIN32
 // Get exe directory

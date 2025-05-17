@@ -1,3 +1,13 @@
+smartmontools (7.3-2.1) UNRELEASED; urgency=medium
+
+  `/usr/share/smartmontools/smartd-runner` no longer sets the positional
+  parameters 1 to 3 when invoking the scripts in `/etc/smartmontools/run.d`.
+
+  Use `smartd`’s `SMARTD_*`-family of environment variables (see the
+  smartd.conf(5) manpage) instead.
+
+ -- Christoph Anton Mitterer <mail@christoph.anton.mitterer.name>  Sat, 19 Nov 2022 02:12:30 +0100
+
 smartmontools (7.0-1) unstable; urgency=medium
 
   This release re-introduces "update-smart-drivedb" utility that now uses
