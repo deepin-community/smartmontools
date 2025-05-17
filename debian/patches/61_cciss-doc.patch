@@ -14,28 +14,11 @@ Refreshed by nirgal@debian.org 2019-09-17
  smartd.conf.5.in | 10 ++++++++++
  2 files changed, 16 insertions(+)
 
---- a/smartd.conf
-+++ b/smartd.conf
-@@ -91,8 +91,14 @@
- # disk (port) number is specified in device name.
- # NOTE: On Windows, DEVICESCAN works also for 3ware controllers.
- #/dev/hdc,0 -a -s L/../../2/01
- #/dev/hdc,1 -a -s L/../../2/03
-+#
-+# Monitor 2 disks connected to the first HP SmartArray controller which
-+# uses the cciss driver. Start long tests on Sunday nights and short
-+# self-tests every night and send errors to root
-+#/dev/sda -d cciss,0 -a -s (L/../../7/02|S/../.././02) -m root
-+#/dev/sda -d cciss,1 -a -s (L/../../7/03|S/../.././03) -m root
- 
- # Monitor 3 ATA disks directly connected to a HighPoint RocketRAID. Start long
- # self-tests Sundays between 1-2, 2-3, and 3-4 am. 
- #/dev/sdd -d hpt,1/1 -a -s L/../../7/01
 --- a/smartd.conf.5.in
 +++ b/smartd.conf.5.in
-@@ -150,8 +150,14 @@
- /dev/tws0 \-d 3ware,1 \-a \-s L/../../7/02
- .\" %ENDIF OS FreeBSD
+@@ -164,8 +164,14 @@
+ /dev/sda \-d cciss,1 \-a \-s (L/../../7/03|S/../.././03) \-m root
+ .\" %ENDIF OS Linux
  .\" %IF OS FreeBSD Linux
  #
 +# Monitor 2 disks connected to the first HP SmartArray controller which
@@ -48,7 +31,7 @@ Refreshed by nirgal@debian.org 2019-09-17
  # Start short self\-tests daily between 1\-2, 2\-3, and
  # 3\-4 am.
  .\" %ENDIF OS FreeBSD Linux
-@@ -225,8 +231,12 @@
+@@ -231,8 +237,12 @@
  #
  ################################################
  .Ve

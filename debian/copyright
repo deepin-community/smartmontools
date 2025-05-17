@@ -5,7 +5,7 @@ Source: http://smartmontools.sourceforge.net/
 
 Files: *
 Copyright:
-    2004-2020 Christian Franke
+    2004-2023 Christian Franke
     2016      Casey Biemiller <cbiemiller@intelliprop.com>
     2014      Alex Samorukov <samm@os2.kiev.ua>
     2000      Andre Hedrick <andre@linux-ide.org>
@@ -13,7 +13,7 @@ Copyright:
     2002-2018 Bruce Allen
     2003-2015 Casper Dik
     2004-2010 David Snyder
-    2003-2020 Douglas Gilbert <dgilbert@interlog.com>
+    2003-2023 Douglas Gilbert <dgilbert@interlog.com>
     2003-2010 Eduard Martinescu
     2012      Hank Wu <hank@areca.com.tw>
     2013      Hannes von Haugwitz <hannes@vonhaugwitz.com>
@@ -30,6 +30,8 @@ Copyright:
     2003-2008 SAWADA Keiji
     2004-2008 Yuri Dario
     1999-2003 3ware Inc.
+    2021-2023 Seagate Technology LLC and/or its Affiliates
+    2022      3SNIC Inc.
 License: GPL-2+
 
 Files:
@@ -91,7 +93,7 @@ License: BSD-2-Clause and GPL-2+
 
 Files: debian/*
 Copyright:
-    2019-2021 Dmitry Smirnov <onlyjob@debian.org>
+    2019-2025 Dmitry Smirnov <onlyjob@debian.org>
     2003-2009 Guido Guenther <agx@debian.org>
     2009-2015 Giuseppe Iuculano <giuseppe@iuculano.it>
     2010      Florian Weimer <fweimer@bfk.de>

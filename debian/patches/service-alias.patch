@@ -5,7 +5,7 @@ Description: register service alias, as per original service name.
 
 --- a/smartd.service.in
 +++ b/smartd.service.in
-@@ -10,4 +10,5 @@
+@@ -13,4 +13,5 @@
  ExecReload=/bin/kill -HUP $MAINPID
  
  [Install]

@@ -4,11 +4,11 @@
 #
 # Home page of code is: https://www.smartmontools.org
 #
-# Copyright (C) 2019-20 Christian Franke
+# Copyright (C) 2019-23 Christian Franke
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# $Id: cppcheck.sh 5037 2020-03-05 16:07:34Z chrfranke $
+# $Id: cppcheck.sh 5489 2023-07-02 17:24:20Z chrfranke $
 #
 
 set -e
@@ -17,18 +17,20 @@ myname=$0
 
 usage()
 {
-  echo "Usage: $myname [-v|-q] [-jJOBS] [--library=CFG] [--platform=TYPE] [FILE ...]"
+  echo "Usage: $myname [-v|-q] [-c CPPCHECK] [-jJOBS] [--library=CFG] [--platform=TYPE] [FILE ...]"
   exit 1
 }
 
 # Parse options
 jobs=
 v=
+cppcheck="cppcheck"
 library="--library=posix"
 platform="--platform=unix64"
 unused_func=",unusedFunction"
 
 while true; do case $1 in
+  -c) shift; test -n "$1" || usage; cppcheck=$1 ;;
   -j?*) jobs=$1; unused_func= ;;
   -q) v="-q" ;;
   -v) v="-v" ;;
@@ -58,10 +60,10 @@ else
 fi
 
 # Check cppcheck version
-ver=$(cppcheck --version) || exit 1
+ver=$("$cppcheck" --version) || exit 1
 ver=${ver##* }
 case $ver in
-  1.85) ;;
+  1.8[56]|2.[237]|2.1[01]) ;;
   *) echo "$myname: cppcheck $ver not tested with this script" ;;
 esac
 
@@ -74,16 +76,28 @@ sup_list="
   #style
   asctime_rCalled:utility.cpp
   asctime_sCalled:utility.cpp
-  bzeroCalled
-  bcopyCalled
-  ftimeCalled
+  cstyleCast:sg_unaligned.h
+  getgrgidCalled:popen_as_ugid.cpp
+  getgrnamCalled:popen_as_ugid.cpp
+  getpwnamCalled:popen_as_ugid.cpp
+  getpwuidCalled:popen_as_ugid.cpp
   readdirCalled
   strtokCalled
-  missingOverride
   unusedStructMember
   unusedFunction:sg_unaligned.h
   unmatchedSuppression
 "
+
+case $ver in
+  2.1[1-9]) sup_list="$sup_list
+  #error
+  ctuOneDefinitionRuleViolation:cissio_freebsd.h
+  ctuOneDefinitionRuleViolation:freebsd_nvme_ioctl.h
+  #information
+  missingInclude
+  missingIncludeSystem
+" ;;
+esac
 
 suppress=
 for s in $sup_list; do
@@ -98,6 +112,7 @@ done
 defs="\
   -U__KERNEL__
   -U__LP64__
+  -U__MINGW64_VERSION_STR
   -U__VERSION__
   -U_NETWARE
   -DBUILD_INFO=\"(...)\"
@@ -105,17 +120,23 @@ defs="\
   -DENOTSUP=1
   -DHAVE_ATTR_PACKED
   -DHAVE_CONFIG_H
+  -DPACKAGE_VERSION=\"7.4\"
   -DSG_IO=1
-  -DSMARTMONTOOLS_SVN_REV=\"r1\"
+  -DSMARTMONTOOLS_BUILD_HOST=\"host\"
   -DSMARTMONTOOLS_ATTRIBUTELOG=\"/file\"
   -DSMARTMONTOOLS_SAVESTATES=\"/file\"
   -DSMARTMONTOOLS_DRIVEDBDIR=\"/dir\"
+  -USMARTMONTOOLS_RELEASE_DATE
+  -USMARTMONTOOLS_RELEASE_TIME
+  -USMARTMONTOOLS_SVN_REV
+  -DSOURCE_DATE_EPOCH=1665402854
   -Umakedev
   -Ustricmp"
 
 # Print brief version of command
 cat <<EOF
-cppcheck-$ver \\
+# Cppcheck $ver
+$cppcheck \\
   --enable=$enable \\
   $library \\
   $platform \\
@@ -126,7 +147,7 @@ $(for s in $suppress; do echo "  $s \\"; done)
 EOF
 
 # Run cppcheck with swapped stdout<>stderr
-cppcheck \
+"$cppcheck" \
   $v \
   $jobs \
   --enable="$enable" \
