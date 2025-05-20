@@ -3,7 +3,7 @@
  *
  * Home page of code is: https://www.smartmontools.org
  *
- * Copyright (C) 2019-20 Christian Franke
+ * Copyright (C) 2019-22 Christian Franke
  *
  * Based on JMraidcon (same license):
  *   Copyright (C) 2010 Werner Johansson
@@ -25,7 +25,7 @@
 
 #include <errno.h>
 
-const char * dev_jmb39x_raid_cpp_svnid = "$Id: dev_jmb39x_raid.cpp 5089 2020-10-06 15:31:47Z chrfranke $";
+const char * dev_jmb39x_raid_cpp_svnid = "$Id: dev_jmb39x_raid.cpp 5366 2022-04-30 15:26:22Z chrfranke $";
 
 static void jmbassert_failed(int line, const char * expr)
 {
@@ -271,7 +271,8 @@ static int scsi_get_lba_size(scsi_device * scsidev)
 
 static bool scsi_read_lba8(scsi_device * scsidev, uint8_t lba8, uint8_t (& data)[512])
 {
-  struct scsi_cmnd_io io_hdr; memset(&io_hdr, 0, sizeof(io_hdr));
+  struct scsi_cmnd_io io_hdr = {};
+
   io_hdr.dxfer_dir = DXFER_FROM_DEVICE;
   io_hdr.dxfer_len = 512;
   io_hdr.dxferp = data;
@@ -288,7 +289,8 @@ static bool scsi_read_lba8(scsi_device * scsidev, uint8_t lba8, uint8_t (& data)
 
 static bool scsi_write_lba8(scsi_device * scsidev,  uint8_t lba8, const uint8_t (& data)[512])
 {
-  struct scsi_cmnd_io io_hdr; memset(&io_hdr, 0, sizeof(io_hdr));
+  struct scsi_cmnd_io io_hdr = {};
+
   io_hdr.dxfer_dir = DXFER_TO_DEVICE;
   io_hdr.dxfer_len = 512;
   io_hdr.dxferp = const_cast<uint8_t *>(data);
@@ -319,11 +321,11 @@ public:
 
   virtual ~jmb39x_device();
 
-  virtual bool open();
+  virtual bool open() override;
 
-  virtual bool close();
+  virtual bool close() override;
 
-  virtual bool ata_pass_through(const ata_cmd_in & in, ata_cmd_out & out);
+  virtual bool ata_pass_through(const ata_cmd_in & in, ata_cmd_out & out) override;
 
 private:
   uint8_t m_version;
@@ -727,8 +729,8 @@ ata_device * smart_interface::get_jmb39x_device(const char * type, smart_device 
     force = true;
     n1 += n2;
   }
-  if (!(n1 == len && port <= 4 && 33 <= lba && lba <= 62)) {
-    set_err(EINVAL, "Option -d %s,N[,sLBA][,force] must have 0 <= N <= 4 [, 33 <= LBA <= 62]", prefix);
+  if (!(n1 == len && port <= 4 && 1 <= lba && lba <= 255)) {
+    set_err(EINVAL, "Option -d %s,N[,sLBA][,force] must have 0 <= N <= 4 [, 1 <= LBA <= 255]", prefix);
     return 0;
   }
 

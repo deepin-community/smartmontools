@@ -232,7 +232,7 @@ Subject: _remove-pragma
  struct ata_sct_error_recovery_control_command
  {
    unsigned short action_code;       // 3 = Error Recovery Control
-   unsigned short function_code;     // 1 = Set, 2 = Return
+   unsigned short function_code;     // 1 = Set Current, 2 = Return Current, 3 = Set Power-on, 4 = Return Power-on, 5 = Restore Default
 @@ -554,9 +531,8 @@
  STATIC_ASSERT(sizeof(ata_sct_error_recovery_control_command) == 512);
  

@@ -3,7 +3,7 @@
  *
  * Home page of code is: https://www.smartmontools.org
  *
- * Copyright (C) 2017-20 Christian Franke
+ * Copyright (C) 2017-22 Christian Franke
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -13,7 +13,7 @@
 
 #include "json.h"
 
-const char * json_cvsid = "$Id: json.cpp 5113 2020-11-07 15:38:57Z chrfranke $"
+const char * json_cvsid = "$Id: json.cpp 5469 2023-03-15 20:00:35Z dpgilbert $"
   JSON_H_CVSID;
 
 #include "sg_unaligned.h"
@@ -32,27 +32,63 @@ static void jassert_failed(int line, const char * expr)
 
 #define jassert(expr) (!(expr) ? jassert_failed(__LINE__, #expr) : (void)0)
 
-static void check_key(const char * key)
+/* Convert to json "snake" format. It will contains only lower case ASCII
+ * alphanumeric characters with all other characters replaced with the
+ * underscore character. Further, all leading and trailing underscores are
+ * removed and repeated underscores with the name are reduced to a single
+ * underscore.
+ * For example "$Output power  (mW)" becomes "output_power_mw". */
+std::string json::str2key(const char * str)
 {
-  // Limit: object keys should be valid identifiers (lowercase only)
-  char c = key[0];
-  jassert('a' <= c && c <= 'z');
-  for (int i = 1; (c = key[i]); i++)
-    jassert(('a' <= c && c <= 'z') || ('0' <= c && c <= '9') || (c == '_'));
+  bool prev_underscore = false;
+  size_t i_sz = strlen(str);
+  int o_ind = 0;
+  /* resultant string's size will be <= input string */
+  std::string res(i_sz, ' ');
+  const char * cp = str;
+  static const int lower_alpha_off = 'a' - 'A';
+  
+  for ( ; *cp ; ++cp) {
+    char c = *cp;
+
+    if (('0' <= c && c <= '9') || ('a' <= c && c <= 'z')) {
+      res[o_ind++] = c;
+      prev_underscore = false;
+    } else if ('A' <= c && c <= 'Z') {
+      res[o_ind++] = c + lower_alpha_off;
+      prev_underscore = false;
+    } else {
+      if ((o_ind > 0) && ! prev_underscore) {
+        res[o_ind++] = '_';
+        prev_underscore = true;
+      }
+    }
+  }
+  if (o_ind == 0)       /* leave single '_' in degenerate case */
+    res[o_ind++] = '_';
+  else if (res[o_ind - 1] == '_')
+    --o_ind;            /* may be trailing underscore, remove */
+  res.erase(o_ind);
+  return res;
 }
 
-json::ref::ref(json & js, const char * key)
+json::ref::ref(json & js)
 : m_js(js)
 {
-  check_key(key);
-  m_path.push_back(node_info(key));
 }
 
-json::ref::ref(const ref & base, const char * key)
+json::ref::ref(json & js, const char * keystr)
+: m_js(js)
+{
+  jassert(keystr && *keystr);
+  m_path.push_back(node_info(keystr));
+}
+
+json::ref::ref(const ref & base, const char * keystr)
 : m_js(base.m_js), m_path(base.m_path)
 {
-  check_key(key);
-  m_path.push_back(node_info(key));
+  jassert(keystr && *keystr);
+  m_path.push_back(node_info(keystr));
 }
 
 json::ref::ref(const ref & base, int index)
@@ -198,31 +234,41 @@ void json::ref::set_unsafe_le128(const void * pvalue)
                      sg_get_unaligned_le64(                 pvalue    ));
 }
 
+void json::ref::operator+=(std::initializer_list<initlist_key_value_pair> ilist)
+{
+  for (const initlist_key_value_pair & kv : ilist) {
+    jassert(kv.keystr && *kv.keystr);
+    switch (kv.value.type) {
+      default: operator[](kv.keystr) = kv.value; break;
+      case nt_object: operator[](kv.keystr) += kv.object; break;
+      case nt_array: operator[](kv.keystr) += kv.array; break;
+    }
+  }
+}
+
+void json::ref::operator+=(std::initializer_list<initlist_value> ilist)
+{
+  int i = 0;
+  for (const initlist_value & v : ilist)
+    operator[](i++) = v;
+}
+
 json::node::node()
-: type(nt_unset),
-  intval(0),
-  intval_hi(0)
 {
 }
 
 json::node::node(const std::string & key_)
-: type(nt_unset),
-  intval(0),
-  intval_hi(0),
-  key(key_)
+: key(key_)
 {
 }
 
 json::node::~node()
 {
-  for (size_t i = 0; i < childs.size(); i++)
-    delete childs[i];
 }
 
 json::node::const_iterator::const_iterator(const json::node * node_p, bool sorted)
 : m_node_p(node_p),
-  m_use_map(sorted && node_p->type == nt_object),
-  m_child_idx(0)
+  m_use_map(sorted && node_p->type == nt_object)
 {
   if (m_use_map)
     m_key_iter = node_p->key2index.begin();
@@ -253,9 +299,9 @@ void json::node::const_iterator::operator++()
 const json::node * json::node::const_iterator::operator*() const
 {
   if (m_use_map)
-    return m_node_p->childs[m_key_iter->second];
+    return m_node_p->childs[m_key_iter->second].get();
   else
-    return m_node_p->childs[m_child_idx];
+    return m_node_p->childs[m_child_idx].get();
 }
 
 json::node * json::find_or_create_node(const json::node_path & path, node_type type)
@@ -274,13 +320,12 @@ json::node * json::find_or_create_node(const json::node_path & path, node_type t
       node * p2;
       if (ni != p->key2index.end()) {
         // Object element exists
-        p2 = p->childs[ni->second];
+        p2 = p->childs[ni->second].get();
       }
       else {
         // Create new object element
         p->key2index[pi.key] = (unsigned)p->childs.size();
-        p2 = new node(pi.key);
-        p->childs.push_back(p2);
+        p->childs.push_back(std::unique_ptr<node>(p2 = new node(pi.key)));
       }
       jassert(p2 && p2->key == pi.key);
       p = p2;
@@ -296,14 +341,14 @@ json::node * json::find_or_create_node(const json::node_path & path, node_type t
       // Existing or new array element?
       if (pi.index < (int)p->childs.size()) {
         // Array index exists
-        p2 = p->childs[pi.index];
+        p2 = p->childs[pi.index].get();
         if (!p2) // Already created ?
-          p->childs[pi.index] = p2 = new node;
+          p->childs[pi.index].reset(p2 = new node);
       }
       else {
         // Grow array, fill gap, create new element
         p->childs.resize(pi.index + 1);
-        p->childs[pi.index] = p2 = new node;
+        p->childs[pi.index].reset(p2 = new node);
       }
       jassert(p2 && p2->key.empty());
       p = p2;
@@ -317,13 +362,6 @@ json::node * json::find_or_create_node(const json::node_path & path, node_type t
   else
     jassert(p->type == type); // Limit: type change not supported
   return p;
-}
-
-json::json()
-: m_enabled(false),
-  m_verbose(false),
-  m_uint128_output(false)
-{
 }
 
 void json::set_bool(const node_path & path, bool value)
@@ -360,7 +398,7 @@ void json::set_cstring(const node_path & path, const char * value)
 {
   if (!m_enabled)
     return;
-  jassert(value != 0); // Limit: nullptr not supported
+  jassert(value != nullptr); // Limit: nullptr not supported
   find_or_create_node(path, nt_string)->strval = value;
 }
 
@@ -371,8 +409,52 @@ void json::set_string(const node_path & path, const std::string & value)
   find_or_create_node(path, nt_string)->strval = value;
 }
 
+void json::set_initlist_value(const node_path & path, const initlist_value & val)
+{
+  if (!m_enabled)
+    return;
+  node * p = find_or_create_node(path, val.type);
+  switch (p->type) {
+    case nt_bool: case nt_int: case nt_uint: p->intval = val.intval; break;
+    case nt_string: p->strval = val.strval; break;
+    default: jassert(false);
+  }
+}
+
+// Return -1 if all UTF-8 sequences are valid, else return index of first invalid char
+static int check_utf8(const char * s)
+{
+  int state = 0, i;
+  for (i = 0; s[i]; i++) {
+    unsigned char c = s[i];
+    // 0xb... (C++14) not used to preserve C++11 compatibility
+    if ((c & 0xc0) == 0x80) {                    // 0xb10xxxxx
+      if (--state < 0)
+        return i;
+    }
+    else {
+      if (state != 0)
+        return i;
+      if (!(c & 0x80))                           // 0xb0xxxxxxx
+        ;
+      else if ((c & 0xe0) == 0xc0 && (c & 0x1f)) // 0xb110xxxxx
+        state = 1;
+      else if ((c & 0xf0) == 0xe0 && (c & 0x0f)) // 0xb1110xxxx
+        state = 2;
+      else if ((c & 0xf8) == 0xf0 && (c & 0x07)) // 0xb11110xxx
+        state = 3;
+      else
+        return i;
+    }
+  }
+  if (state != 0)
+    return i;
+  return -1;
+}
+
 static void print_quoted_string(FILE * f, const char * s)
 {
+  int utf8_rc = -2;
   putc('"', f);
   for (int i = 0; s[i]; i++) {
     char c = s[i];
@@ -381,9 +463,15 @@ static void print_quoted_string(FILE * f, const char * s)
     else if (c == '\t') {
       putc('\\', f); c = 't';
     }
-    else if ((unsigned char)c < ' ')
-      c = '?'; // Not ' '-'~', '\t' or UTF-8
-    putc(c, f);
+    // Print as UTF-8 unless the string contains any invalid sequences
+    // "\uXXXX" is not used because it is not valid for YAML
+    if (   (' ' <= c && c <= '~')
+        || ((c & 0x80) && (utf8_rc >= -1 ? utf8_rc : (utf8_rc = check_utf8(s + i))) == -1))
+      putc(c, f);
+    else
+      // Print informal hex string for unexpected chars:
+      // Control chars (except TAB), DEL(0x7f), bit 7 set and no valid UTF-8
+      fprintf(f, "\\\\x%02x", (unsigned char)c);
   }
   putc('"', f);
 }
@@ -425,13 +513,11 @@ static char yaml_string_needs_quotes(const char * s)
 
 void json::print_json(FILE * f, bool pretty, bool sorted, const node * p, int level)
 {
-  if (!p->key.empty())
-    fprintf(f, "\"%s\":%s", p->key.c_str(), (pretty ? " " : ""));
-
+  bool is_obj = (p->type == nt_object);
   switch (p->type) {
     case nt_object:
     case nt_array:
-      putc((p->type == nt_object ? '{' : '['), f);
+      putc((is_obj ? '{' : '['), f);
       if (!p->childs.empty()) {
         bool first = true;
         for (node::const_iterator it(p, sorted); !it.at_end(); ++it) {
@@ -442,10 +528,13 @@ void json::print_json(FILE * f, bool pretty, bool sorted, const node * p, int le
           const node * p2 = *it;
           if (!p2) {
             // Unset element of sparse array
-            jassert(p->type == nt_array);
+            jassert(!is_obj);
             fputs("null", f);
           }
           else {
+            jassert(is_obj == !p2->key.empty());
+            if (is_obj)
+              fprintf(f, "\"%s\":%s", p2->key.c_str(), (pretty ? " " : ""));
             // Recurse
             print_json(f, pretty, sorted, p2, level + 1);
           }
@@ -454,7 +543,7 @@ void json::print_json(FILE * f, bool pretty, bool sorted, const node * p, int le
         if (pretty)
           fprintf(f, "\n%*s", level * 2, "");
       }
-      putc((p->type == nt_object ? '}' : ']'), f);
+      putc((is_obj ? '}' : ']'), f);
       break;
 
     case nt_bool:
@@ -558,15 +647,16 @@ void json::print_yaml(FILE * f, bool pretty, bool sorted, const node * p, int le
 void json::print_flat(FILE * f, const char * assign, bool sorted, const node * p,
                       std::string & path)
 {
+  bool is_obj = (p->type == nt_object);
   switch (p->type) {
     case nt_object:
     case nt_array:
-      fprintf(f, "%s%s%s;\n", path.c_str(), assign, (p->type == nt_object ? "{}" : "[]"));
+      fprintf(f, "%s%s%s;\n", path.c_str(), assign, (is_obj ? "{}" : "[]"));
       if (!p->childs.empty()) {
         unsigned len = path.size();
         for (node::const_iterator it(p, sorted); !it.at_end(); ++it) {
           const node * p2 = *it;
-          if (p->type == nt_array) {
+          if (!is_obj) {
             char buf[10]; snprintf(buf, sizeof(buf), "[%u]", it.array_index());
             path += buf;
           }
@@ -575,7 +665,7 @@ void json::print_flat(FILE * f, const char * assign, bool sorted, const node * p
           }
           if (!p2) {
             // Unset element of sparse array
-            jassert(p->type == nt_array);
+            jassert(!is_obj);
             fprintf(f, "%s%snull;\n", path.c_str(), assign);
           }
           else {

@@ -3,7 +3,7 @@
  *
  * Home page of code is: https://www.smartmontools.org
  *
- * Copyright (C) 2008-20 Christian Franke
+ * Copyright (C) 2008-22 Christian Franke
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -11,7 +11,7 @@
 #ifndef DEV_INTERFACE_H
 #define DEV_INTERFACE_H
 
-#define DEV_INTERFACE_H_CVSID "$Id: dev_interface.h 5114 2020-11-09 21:53:58Z chrfranke $\n"
+#define DEV_INTERFACE_H_CVSID "$Id: dev_interface.h 5455 2023-02-12 05:13:17Z dpgilbert $\n"
 
 #include "utility.h"
 
@@ -575,6 +575,13 @@ protected:
 
 struct scsi_cmnd_io;
 
+enum scsi_cmd_support
+{
+  SC_SUPPORT_UNKNOWN = 0,
+  SC_NO_SUPPORT,
+  SC_SUPPORT,
+};
+
 /// SCSI device access
 class scsi_device
 : virtual public /*extends*/ smart_device
@@ -596,6 +603,18 @@ public:
   bool use_rcap16() const
     { return rcap16_first; }
 
+  void set_spc4_or_higher() { spc4_or_above = true; }
+
+  bool is_spc4_or_higher() const { return spc4_or_above; }
+
+  bool query_cmd_support();
+
+  bool checked_cmd_support() const { return rsoc_queried; }
+
+  enum scsi_cmd_support cmd_support_level(uint8_t opcode, bool sa_valid,
+                                          uint16_t sa,
+                                          bool for_lsense_spc = false) const;
+
 protected:
   /// Hide/unhide SCSI interface.
   void hide_scsi(bool hide = true)
@@ -604,11 +623,28 @@ protected:
   /// Default constructor, registers device as SCSI.
   scsi_device()
     : smart_device(never_called),
-      rcap16_first(false)
+      rcap16_first(false),
+      spc4_or_above(false),
+      rsoc_queried(false),
+      rsoc_sup(SC_SUPPORT_UNKNOWN),
+      logsense_sup(SC_SUPPORT_UNKNOWN),
+      logsense_spc_sup(SC_SUPPORT_UNKNOWN),
+      rcap16_sup(SC_SUPPORT_UNKNOWN),
+      rdefect10_sup(SC_SUPPORT_UNKNOWN),
+      rdefect12_sup(SC_SUPPORT_UNKNOWN)
     { hide_scsi(false); }
 
 private:
   bool rcap16_first;
+  bool spc4_or_above;
+
+  bool rsoc_queried;
+  scsi_cmd_support rsoc_sup;
+  scsi_cmd_support logsense_sup;
+  scsi_cmd_support logsense_spc_sup;
+  scsi_cmd_support rcap16_sup;
+  scsi_cmd_support rdefect10_sup;
+  scsi_cmd_support rdefect12_sup;
 };
 
 
@@ -900,12 +936,6 @@ public:
   /// TODO: Remove this hack.
   virtual std::string get_app_examples(const char * appname);
 
-  /// Get microseconds since some unspecified starting point.
-  /// Used only for command duration measurements in debug outputs.
-  /// Returns -1 if unsupported.
-  /// Default implementation uses clock_gettime(), gettimeofday() or ftime().
-  virtual int64_t get_timer_usec();
-
   /// Disable/Enable system auto standby/sleep mode.
   /// Return false if unsupported or if system is running
   /// on battery.
@@ -930,6 +960,14 @@ public:
   /// Printf()-like formatting is supported.
   /// Returns false always to allow use as a return expression.
   bool set_err(int no, const char * msg, ...)
+    __attribute_format_printf(3, 4);
+
+  /// Set last error number and message.
+  /// Printf()-like formatting is supported.
+  /// Returns nullptr always to allow use as a return expression
+  /// of any pointer type.
+  // (Not using 'std::nullptr_t' because it requires <cstddef>)
+  decltype(nullptr) set_err_np(int no, const char * msg, ...)
     __attribute_format_printf(3, 4);
 
   /// Set last error info struct.

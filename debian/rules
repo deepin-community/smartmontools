@@ -14,6 +14,9 @@ DEB_HOST_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 
 ifeq ($(DEB_HOST_ARCH_OS),linux)
 	CONFIGURE_ARGS += --with-selinux
+	CONFIGURE_ARGS += --with-systemdenvfile=/etc/default/smartmontools
+	CONFIGURE_ARGS += --with-systemdsystemunitdir=/usr/lib/systemd/system
+	CONFIGURE_ARGS += --with-libsystemd=auto
 endif
 
 ifeq ($(DEB_HOST_ARCH_OS),kfreebsd)
@@ -40,14 +43,12 @@ override_dh_auto_configure:
 	    --with-initscriptdir=no \
 	    --docdir=/usr/share/doc/smartmontools \
 	    --with-attributelog=/var/lib/smartmontools/attrlog. \
+	    --with-drivedbinstdir=/usr/share/smartmontools \
 	    --with-drivedbdir=/var/lib/smartmontools/drivedb \
 	    --with-exampledir=/usr/share/doc/smartmontools/examples/ \
 	    --with-savestates=/var/lib/smartmontools/smartd. \
 	    --with-smartdplugindir=/etc/smartmontools/smartd_warning.d \
 	    --with-smartdscriptdir=/usr/share/smartmontools \
-	    --with-systemdenvfile=/etc/default/smartmontools \
-	    --with-systemdsystemunitdir=/lib/systemd/system \
-	    --with-libsystemd=auto \
 	    ${CONFIGURE_ARGS} \
 	;
 
@@ -63,13 +64,12 @@ override_dh_install:
 	dh_install
 	$(RM) -v \
 	    debian/smartmontools/lib/systemd/system/smartd.service \
+	    debian/smartmontools/usr/lib/systemd/system/smartd.service \
 	    debian/smartmontools/usr/share/doc/smartmontools/ChangeLog \
 	    debian/smartmontools/usr/share/doc/smartmontools/COPYING \
 	    debian/smartmontools/usr/share/doc/smartmontools/INSTALL \
 	    debian/smartmontools/usr/share/doc/smartmontools/TODO \
 	;
-	## #976696
-	mv -v debian/smartmontools/var/lib/smartmontools/drivedb/* debian/smartmontools/usr/share/smartmontools/
 
 override_dh_fixperms:
 	dh_fixperms

@@ -15,7 +15,7 @@
 #include "dev_tunnelled.h"
 #include <errno.h>
 
-const char * dev_intelliprop_cpp_cvsid = "$Id: dev_intelliprop.cpp 5089 2020-10-06 15:31:47Z chrfranke $";
+const char * dev_intelliprop_cpp_cvsid = "$Id: dev_intelliprop.cpp 5449 2023-02-05 14:44:07Z chrfranke $";
 
 //Vendor Specific log addresses
 #define LOG_C0           0xc0
@@ -248,9 +248,9 @@ public:
 
   virtual ~intelliprop_device();
 
-  virtual bool open();
+  virtual bool open() override;
 
-  virtual bool ata_pass_through(const ata_cmd_in & in, ata_cmd_out & out);
+  virtual bool ata_pass_through(const ata_cmd_in & in, ata_cmd_out & out) override;
 
 private:
   unsigned m_phydrive;
@@ -295,11 +295,15 @@ ata_device * smart_interface::get_intelliprop_device(const char * type, ata_devi
   ata_device_auto_ptr atadev_holder(atadev);
 
   unsigned phydrive = ~0; int n = -1;
-  sscanf(type, "intelliprop,%u%n", &phydrive, &n);
-  if (!(n == (int)strlen(type) && phydrive <= 3)) {
-    set_err(EINVAL, "Option '-d intelliprop,N' must have 0 <= N <= 3");
-    return 0;
-  }
+  sscanf(type, "intelliprop,%u,force%n", &phydrive, &n);
+  // TODO: Remove after smartmontools 7.4
+  if (n != (int)strlen(type))
+    return set_err_np(EINVAL,
+      "The device type 'intelliprop' is deprecated and will be removed in a\n"
+      "future version of smartmontools.  If this device type is still needed, please\n"
+      "use '-d intelliprop,N,force' and inform " PACKAGE_BUGREPORT                     );
+  if (phydrive > 3)
+    return set_err_np(EINVAL, "Option '-d intelliprop,N,force' must have 0 <= N <= 3");
 
   ata_device * itldev = new intelliprop::intelliprop_device(this, phydrive, atadev);
   // 'atadev' is now owned by 'itldev'
