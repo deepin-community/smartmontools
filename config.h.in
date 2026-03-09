@@ -18,6 +18,9 @@
 /* Define to 1 if you have the <cap-ng.h> header file. */
 #undef HAVE_CAP_NG_H
 
+/* Define to 1 if you have the `close_range' function. */
+#undef HAVE_CLOSE_RANGE
+
 /* Define to 1 if you have the <dev/ata/atavar.h> header file. */
 #undef HAVE_DEV_ATA_ATAVAR_H
 
@@ -63,12 +66,6 @@
 
 /* Define to 1 if you have the <selinux/selinux.h> header file. */
 #undef HAVE_SELINUX_SELINUX_H
-
-/* Define to 1 if you have the `sigaction' function. */
-#undef HAVE_SIGACTION
-
-/* Define to 1 if you have the `sigset' function. */
-#undef HAVE_SIGSET
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H

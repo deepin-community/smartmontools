@@ -1,4 +1,4 @@
-smartmontools (7.3-2.1) UNRELEASED; urgency=medium
+smartmontools (7.3-2.1) unstable; urgency=medium
 
   `/usr/share/smartmontools/smartd-runner` no longer sets the positional
   parameters 1 to 3 when invoking the scripts in `/etc/smartmontools/run.d`.

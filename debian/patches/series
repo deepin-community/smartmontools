@@ -2,6 +2,6 @@
 53_use-smartd-runner-by-default.diff
 61_cciss-doc.patch
 63_removable.patch
-automake_1.17.patch
+automake.patch
 manpage.diff
 service-alias.patch

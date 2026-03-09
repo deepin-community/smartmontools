@@ -8,7 +8,7 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# $Id: update-smart-drivedb.in 5359 2022-04-24 15:11:30Z chrfranke $
+# $Id: update-smart-drivedb.in 5699 2025-04-25 14:45:35Z chrfranke $
 #
 
 set -e
@@ -268,6 +268,7 @@ check_file()
   f=$1; firstchar=$2; minsize=$3; maxsize=$4
 
   # Check first chars
+  # shellcheck disable=SC2254
   case `dd if="$f" bs=1 count=1 2>/dev/null` in
     $firstchar) ;;
     \<) echo "HTML error message"; return 1 ;;
@@ -395,7 +396,7 @@ pnILDDMBUNQMBm/XlCYQUetyrJnAVzFGXurtjEXQ/DDnbfy2Z8efoG8rtq7v3fxS
 "
       ;;
 
-    RELEASE_7_[023]_DRIVEDB)
+    RELEASE_7_[0235]_DRIVEDB)
 # Smartmontools Signing Key (through 2025) <smartmontools-database@listi.jpberlin.de>
 # Smartmontools Signing Key (through 2020) <smartmontools-database@listi.jpberlin.de>
 # Key ID 721042C5

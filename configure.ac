@@ -1,17 +1,17 @@
 #
-# $Id: configure.ac 5530 2023-08-01 11:00:21Z chrfranke $
+# $Id: configure.ac 5714 2025-04-30 07:43:44Z chrfranke $
 #
 dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ([2.64])
-AC_INIT([smartmontools],[7.4],[smartmontools-support@listi.jpberlin.de],[],[https://www.smartmontools.org/])
-AM_INIT_AUTOMAKE([1.10 foreign])
+AC_INIT([smartmontools],[7.5],[smartmontools-support@listi.jpberlin.de],[],[https://www.smartmontools.org/])
+AM_INIT_AUTOMAKE([1.13 foreign])
 
 # Version of drive database branch
-smartmontools_drivedb_version=7.3
+smartmontools_drivedb_version=7.5
 
 # Set by 'do_release' script, commented out when release number is bumped.
-smartmontools_release_date=2023-08-01
-smartmontools_release_time="10:59:45 UTC"
+smartmontools_release_date=2025-04-30
+smartmontools_release_time="07:42:55 UTC"
 
 if test -n "$smartmontools_release_date"; then
   AC_DEFINE_UNQUOTED(SMARTMONTOOLS_RELEASE_DATE, "$smartmontools_release_date",    [smartmontools Release Date])
@@ -22,7 +22,7 @@ else
   AC_SUBST(releaseversion, ['${PACKAGE}-pre-${VERSION}'])
 fi
 
-smartmontools_cvs_tag=`echo '$Id: configure.ac 5530 2023-08-01 11:00:21Z chrfranke $'`
+smartmontools_cvs_tag=`echo '$Id: configure.ac 5714 2025-04-30 07:43:44Z chrfranke $'`
 AC_DEFINE_UNQUOTED(SMARTMONTOOLS_CONFIGURE_ARGS, "$ac_configure_args",             [smartmontools Configure Arguments])
 AC_DEFINE_UNQUOTED(CONFIG_H_CVSID,               "$smartmontools_cvs_tag",         [smartmontools CVS Tag])
 
@@ -43,6 +43,7 @@ if test "$cross_compiling" = "no"; then
     [AC_MSG_WARN([m4/pkg.m4 missing, systemd detection disabled])])
 fi
 
+AC_ARG_VAR(SOURCE_DATE_EPOCH, [Reproducible build timestamp])
 AC_ARG_VAR(NM, [Symbol list command])
 AC_ARG_VAR(WINDMC, [Windows message compiler command])
 AC_ARG_VAR(WINDRES, [Windows resource compiler command])
@@ -68,40 +69,19 @@ case "$host_os" in
     ;;
 esac
 
-AC_MSG_CHECKING([whether reproducible build is selected (SOURCE_DATE_EPOCH)])
-res=no
-if test -n "$SOURCE_DATE_EPOCH"; then
-  res=yes
-  test -z "`echo "$SOURCE_DATE_EPOCH" | sed 's,[[0-9]]*,,'`" || res=error
-fi
-AC_MSG_RESULT([$res])
-case $res in
-  error) AC_MSG_ERROR([Malformed SOURCE_DATE_EPOCH]) ;;
-  yes) CPPFLAGS="${CPPFLAGS}${CPPFLAGS:+ }-DSOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" ;;
-esac
-
-# Check for SVN.
-AC_MSG_CHECKING([whether this is a build from SVN])
-is_svn_build=no
-svn_deps=
-if test -f "$srcdir/.svn/wc.db"; then
-  # SVN >= 1.7 working copy
-  svn_deps='${srcdir}/.svn/wc.db'
-  is_svn_build=unknown
-  if (cd "$srcdir" && svn --version && svnversion && svn info) >/dev/null 2>&1; then
-    is_svn_build=yes
-  fi
-fi
-AC_SUBST([svn_deps])
-AM_CONDITIONAL(IS_SVN_BUILD, [test "$is_svn_build" = "yes"])
-AC_MSG_RESULT([$is_svn_build])
+# SOURCE_DATE_EPOCH must be either unset or numeric.
+test -z "${SOURCE_DATE_EPOCH+set}" \
+|| test -z "`echo "$SOURCE_DATE_EPOCH" | sed -e 's,^$,X,' -e 's,[[0-9]],,g'`" \
+|| AC_MSG_ERROR([Malformed SOURCE_DATE_EPOCH: '$SOURCE_DATE_EPOCH'])
+AC_SUBST([SOURCE_DATE_EPOCH])
+AM_CONDITIONAL(REPRODUCIBLE_BUILD, [test -n "$SOURCE_DATE_EPOCH"])
 
 # Checks for header files.
 AC_CHECK_HEADERS([locale.h])
 AC_CHECK_HEADERS([byteswap.h], [], [], [])
 
 case "$host" in
-  *-*-freebsd*|*-*-dragonfly*|*-*-kfreebsd*-gnu*)
+  *-*-freebsd*|*-*-dragonfly*|*-*-kfreebsd*-gnu*|*-*-midnightbsd*)
     # Check for FreeBSD twe and twa include files
     AC_CHECK_HEADERS([sys/tweio.h sys/twereg.h sys/tw_osl_ioctl.h])
     # Check for the FreeBSD CCISS system header and use internal one if not found
@@ -122,10 +102,6 @@ case "$host" in
   *-*-netbsd*|*-*-openbsd*)
     AC_CHECK_HEADERS([dev/ata/atavar.h])
     ;;
-  *-*-mingw*)
-    # Older MinGW-w64 (5.0.3) require -lwinpthread
-    AC_SEARCH_LIBS([clock_gettime], [winpthread])
-    ;;
 esac
 
 # Checks for typedefs, and compiler characteristics.
@@ -135,6 +111,16 @@ AC_TYPE_LONG_DOUBLE_WIDER
 # Checks for library functions.
 AC_CHECK_FUNCS([getopt_long], [need_getopt_long=no], [need_getopt_long=yes])
 AM_CONDITIONAL(NEED_GETOPT_LONG, [test "$need_getopt_long" = "yes"])
+
+case "$host_os" in
+  mingw*)
+    # Older MinGW-w64 (5.0.3) require -lwinpthread
+    AC_SEARCH_LIBS([clock_gettime], [winpthread])
+    ;;
+  *)
+    AC_CHECK_FUNCS([close_range])
+    ;;
+esac
 
 # Check byte ordering (defines WORDS_BIGENDIAN)
 AC_C_BIGENDIAN
@@ -171,7 +157,7 @@ AM_CONDITIONAL(INSTALL_INITSCRIPT, [test -n "$initddir"])
 
 # use different init script templates for different OS
 case "${host}" in
-  *-*-freebsd*)
+  *-*-freebsd*|*-*-midnightbsd*)
     initdfile="smartd.freebsd.initd"
     ;;
   *-apple-darwin*)
@@ -218,7 +204,7 @@ AC_ARG_WITH(update-smart_drivedb,
     [Install update-smart-drivedb script (and backport it to branches/RELEASE_X_Y_DRIVEDB) [yes]])],
   [ case "$withval" in
       yes|no) ;;
-      5.4[[0-3]]|6.[[0-6]]|7.[[023]]) drivedb_version=$withval; with_update_smart_drivedb=yes ;;
+      5.4[[0-3]]|6.[[0-6]]|7.[[0235]]) drivedb_version=$withval; with_update_smart_drivedb=yes ;;
       *) AC_MSG_ERROR([Invalid drivedb branch version: $withval]) ;;
     esac
   ],
@@ -400,25 +386,15 @@ AC_SUBST(systemdenvfile)
 # TODO: Remove when NVMe support is no longer EXPERIMENTAL
 AC_ARG_WITH(nvme-devicescan,
   [AS_HELP_STRING([--with-nvme-devicescan@<:@=yes|no@:>@],
-    [Include NVMe devices in smartctl --scan and smartd DEVICESCAN [Darwin,FreeBSD,Linux,Windows:yes;NetBSD:no]])])
+    [Include NVMe devices in smartctl --scan and smartd DEVICESCAN [yes]])])
 
-# TODO: Remove after smartmontools 7.4
+# TODO: Remove after smartmontools 7.5
 AC_ARG_WITH(signal-func,
-  [AS_HELP_STRING([--with-signal-func=@<:@sigaction|sigset|signal@:>@],
-    [Function to set signal(2) action [sigaction]])],
-  [], [with_signal_func=sigaction])
-
-case "$host:$with_signal_func" in
-  *-*-mingw*:*) ;;
-  *:sigaction)
-    AC_CHECK_FUNCS([sigaction], [], AC_MSG_ERROR([Missing function 'sigaction()'.
-Try '--with-signal-func=sigset' or '--with-signal-func=signal'.
-Please send info about your system to $PACKAGE_BUGREPORT.])) ;;
-  *:sigset)
-    AC_CHECK_FUNCS([sigset], [], AC_MSG_ERROR([Missing function 'sigset()'])) ;;
-  *:signal) ;;
-  *) AC_MSG_ERROR([Invalid option '--with-signal-func=$with_signal_func']) ;;
-esac
+  [AS_HELP_STRING([--with-signal-func], [(removed)])],
+  [AC_MSG_ERROR([
+The option '--with-signal-func' is no longer supported.  If this option is
+still needed, please inform $PACKAGE_BUGREPORT.
+])])
 
 AC_ARG_WITH(cxx11-option,
   [AS_HELP_STRING([--with-cxx11-option=@<:@OPTION|auto|no@:>@],
@@ -615,14 +591,6 @@ else
 fi
 AM_CONDITIONAL(NEED_REGEX, [test "$need_regex" = "yes"])
 
-# TODO: Remove after smartmontools 7.4
-AC_ARG_WITH(solaris-sparc-ata,
-  [AS_HELP_STRING([--with-solaris-sparc-ata], [(removed)])],
-  [AC_MSG_ERROR([
-The option '--with@<:@out@:>@-solaris-sparc-ata' is no longer supported.
-If you still need legacy ATA support on Solaris SPARC, please inform
-$PACKAGE_BUGREPORT.])])
-
 # Set platform-specific modules and symbols
 os_libs=
 os_dltools='curl wget lynx svn'
@@ -647,15 +615,13 @@ case "${host}" in
     os_man_filter=Linux
     os_nvme_devicescan=yes
     ;;
-  *-*-freebsd*|*-*-dragonfly*|*-*-kfreebsd*-gnu*)
+  *-*-freebsd*|*-*-dragonfly*|*-*-kfreebsd*-gnu*|*-*-midnightbsd*)
     os_deps='os_freebsd.o cciss.o dev_areca.o'
     os_libs='-lcam -lsbuf'
     os_dltools='fetch curl wget lynx svn'
     AC_CHECK_LIB(usb, libusb20_dev_get_device_desc)
     os_man_filter=FreeBSD
     os_nvme_devicescan=yes
-    # TODO: Remove after smartmontools 7.4
-    os_nvme_devicescan_changed=yes
     ;;
   *-*-solaris*)
     os_deps='os_solaris.o'
@@ -667,7 +633,9 @@ case "${host}" in
     os_deps='os_netbsd.o'
     os_libs='-lutil'
     os_man_filter=NetBSD
-    os_nvme_devicescan=no
+    os_nvme_devicescan=yes
+    # TODO: Remove after smartmontools 7.5
+    os_nvme_devicescan_changed=yes
     ;;
   *-*-openbsd*)
     os_deps='os_openbsd.o'
@@ -708,8 +676,6 @@ case "${host}" in
     os_darwin=yes
     os_man_filter=Darwin
     os_nvme_devicescan=yes
-    # TODO: Remove after smartmontools 7.4
-    os_nvme_devicescan_changed=yes
     ;;
   *-*-nto-qnx*)
     os_deps='os_qnxnto.o'
@@ -896,6 +862,14 @@ info=`
   echo "C compiler flags:       $CFLAGS"
   echo "linker flags:           $LDFLAGS"
   echo "OS specific modules:    $os_deps $os_libs $LIBS"
+  if test -n "$SOURCE_DATE_EPOCH"; then
+    # GNU date || BSD date
+    d=\`date -Iseconds -d "@$SOURCE_DATE_EPOCH" 2>/dev/null ||
+        date -Iseconds -r "$SOURCE_DATE_EPOCH" 2>/dev/null\`
+    echo "Reproducible build:     SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH [[$d]]"
+  else
+    echo "Reproducible build:     [[disabled]]"
+  fi
 
   case "$host_os" in
     mingw*)
@@ -1022,16 +996,6 @@ The default for the inclusion of NVME devices in smartd.conf
 If option '--without-nvme-devicescan' is still needed, please inform
 $PACKAGE_BUGREPORT - Thanks!
 ])  ;;
-esac
-
-# TODO: Remove after smartmontools 7.4
-case "$host:$with_signal_func" in
-  *-*-mingw*:*|*:sigaction) ;;
-  *) AC_MSG_WARN([
-The option '--with-signal-func=$with_signal_func' is deprecated and will be
-removed in a future version of smartmontools.  If this option is
-still needed, please inform $PACKAGE_BUGREPORT.
-]) ;;
 esac
 
 case "$host_os:$with_libsystemd:$use_libsystemd:$PKG_CONFIG" in

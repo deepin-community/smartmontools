@@ -1,11 +1,11 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: smartmontools
 Upstream-Contact: Christian Franke <Christian.Franke@t-online.de>
-Source: http://smartmontools.sourceforge.net/
+Source: https://github.com/smartmontools/smartmontools
 
 Files: *
 Copyright:
-    2004-2023 Christian Franke
+    2004-2025 Christian Franke
     2016      Casey Biemiller <cbiemiller@intelliprop.com>
     2014      Alex Samorukov <samm@os2.kiev.ua>
     2000      Andre Hedrick <andre@linux-ide.org>

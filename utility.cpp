@@ -4,7 +4,7 @@
  * Home page of code is: https://www.smartmontools.org
  *
  * Copyright (C) 2002-12 Bruce Allen
- * Copyright (C) 2008-23 Christian Franke
+ * Copyright (C) 2008-25 Christian Franke
  * Copyright (C) 2000 Michael Cornwell <cornwell@acm.org>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -55,7 +55,7 @@
 #endif
 #endif // USE_CLOCK_MONOTONIC
 
-const char * utility_cpp_cvsid = "$Id: utility.cpp 5519 2023-07-24 15:57:54Z chrfranke $"
+const char * utility_cpp_cvsid = "$Id: utility.cpp 5646 2025-01-01 10:40:19Z chrfranke $"
   UTILITY_H_CVSID;
 
 const char * packet_types[] = {
@@ -103,7 +103,7 @@ std::string format_version_info(const char * prog_name, int lines /* = 2 */)
   if (lines <= 1)
     return info;
 
-  info += "Copyright (C) 2002-23, Bruce Allen, Christian Franke, www.smartmontools.org\n";
+  info += "Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org\n";
   if (lines == 2)
     return info;
 
@@ -123,6 +123,9 @@ std::string format_version_info(const char * prog_name, int lines /* = 2 */)
 #endif
 #ifdef SMARTMONTOOLS_SVN_REV
     "smartmontools SVN rev " SMARTMONTOOLS_SVN_REV
+#ifdef SMARTMONTOOLS_GIT_HASH
+      " (git " SMARTMONTOOLS_GIT_HASH ")"
+#endif
       " dated " SMARTMONTOOLS_SVN_DATE " at " SMARTMONTOOLS_SVN_TIME "\n"
 #else
     "smartmontools SVN rev is unknown\n"

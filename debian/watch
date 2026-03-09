@@ -1,10 +1,15 @@
-# watch control file for uscan
 # See uscan(1) for format
+# https://salsa.debian.org/snippets/95
+# https://wiki.debian.org/debian/watch
 version=4
 
 opts="\
 pgpmode=default,\
-repack,compression=xz,\
-uversionmangle=s{\-}{.}g,\
-pgpsigurlmangle=s/$/.asc/\
-"  https://sf.net/smartmontools/smartmontools-(\d[\d.]+)\.tar\.(?:gz|xz|bz2)
+pgpsigurlmangle=s{$}{.asc},\
+compression=xz,\
+repack,repacksuffix=+dfsg,\
+dversionmangle=s{[+~]dfsg\d*}{},\
+filenamemangle=s{v?@ANY_VERSION@}{@PACKAGE@-$1.tar.xz},\
+searchmode=plain,\
+" https://api.github.com/repos/smartmontools/@PACKAGE@/releases?per_page=99 \
+  https://github.com/smartmontools/smartmontools/releases/download/RELEASE[^/]+/smartmontools-([\d._]+)\.tar\.gz
