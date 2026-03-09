@@ -1,7 +1,7 @@
 Source: smartmontools
 Section: utils
 Priority: optional
-Standards-Version: 4.6.0
+Standards-Version: 4.7.2
 Maintainer: Dmitry Smirnov <onlyjob@debian.org>
 Uploaders: Florian Maier <contact@marsmenschen.com>,
            Jonathan Dowland <jmtd@debian.org>,
