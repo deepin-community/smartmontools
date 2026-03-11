@@ -1,3 +1,9 @@
+smartmontools (7.5-2deepin1) unstable; urgency=medium
+
+  * update debian/rules to disable services.
+
+ -- tunaichao <tunaichao@uniontech.com>  Wed, 11 Mar 2026 14:39:10 +0800
+
 smartmontools (7.5-2) unstable; urgency=medium
 
   * Patched "autogen.sh" to allow newer automake (Closes: #1118330).
